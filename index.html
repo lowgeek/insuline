@@ -1,0 +1,546 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="theme-color" content="#1a1625">
+    <title>🐱 Suivi Insuline</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Crimson+Pro:wght@400;600;700&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-primary: #1a1625;
+            --bg-secondary: #2a2538;
+            --bg-card: #352f47;
+            --accent-primary: #ff6b9d;
+            --accent-secondary: #c084fc;
+            --accent-success: #4ade80;
+            --text-primary: #f8fafc;
+            --text-secondary: #cbd5e1;
+            --text-muted: #94a3b8;
+            --border: #4a4560;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'DM Sans', sans-serif;
+            background: linear-gradient(135deg, var(--bg-primary) 0%, #251e38 100%);
+            color: var(--text-primary);
+            min-height: 100vh;
+            padding: 20px;
+            position: relative;
+            overflow-x: hidden;
+        }
+
+        body::before {
+            content: '';
+            position: fixed;
+            top: -50%;
+            right: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle, rgba(255, 107, 157, 0.1) 0%, transparent 50%);
+            animation: rotate 30s linear infinite;
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        @keyframes rotate {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            position: relative;
+            z-index: 1;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 40px;
+            animation: fadeInDown 0.6s ease-out;
+        }
+
+        @keyframes fadeInDown {
+            from {
+                opacity: 0;
+                transform: translateY(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        h1 {
+            font-family: 'Crimson Pro', serif;
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 8px;
+            background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .subtitle {
+            font-size: 0.95rem;
+            color: var(--text-muted);
+            font-weight: 400;
+        }
+
+        .status-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 24px;
+            padding: 32px;
+            margin-bottom: 24px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+            animation: fadeInUp 0.6s ease-out 0.1s both;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .status-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: linear-gradient(90deg, var(--accent-primary), var(--accent-secondary));
+        }
+
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 20px;
+            padding: 16px;
+            background: var(--bg-secondary);
+            border-radius: 16px;
+            border: 1px solid var(--border);
+        }
+
+        .status-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        .status-dot.done {
+            background: var(--accent-success);
+            box-shadow: 0 0 20px rgba(74, 222, 128, 0.5);
+        }
+
+        .status-dot.pending {
+            background: var(--accent-primary);
+            box-shadow: 0 0 20px rgba(255, 107, 157, 0.5);
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.7; transform: scale(1.1); }
+        }
+
+        .status-text {
+            font-size: 1.1rem;
+            font-weight: 600;
+        }
+
+        .last-injection {
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+            margin-top: 12px;
+            padding: 12px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 12px;
+            font-family: 'Crimson Pro', serif;
+        }
+
+        .last-injection strong {
+            color: var(--text-primary);
+            font-weight: 600;
+        }
+
+        .action-button {
+            width: 100%;
+            padding: 20px;
+            font-size: 1.1rem;
+            font-weight: 700;
+            border: none;
+            border-radius: 20px;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            font-family: 'DM Sans', sans-serif;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .action-button::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 0;
+            height: 0;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.2);
+            transform: translate(-50%, -50%);
+            transition: width 0.6s, height 0.6s;
+        }
+
+        .action-button:active::before {
+            width: 400px;
+            height: 400px;
+        }
+
+        .btn-record {
+            background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+            color: white;
+            box-shadow: 0 10px 30px rgba(255, 107, 157, 0.4);
+            margin-bottom: 16px;
+        }
+
+        .btn-record:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 15px 40px rgba(255, 107, 157, 0.5);
+        }
+
+        .btn-record:active {
+            transform: translateY(0);
+        }
+
+        .btn-secondary {
+            background: var(--bg-secondary);
+            color: var(--text-primary);
+            border: 1px solid var(--border);
+        }
+
+        .btn-secondary:hover {
+            background: var(--bg-card);
+            border-color: var(--accent-primary);
+        }
+
+        .history-section {
+            animation: fadeInUp 0.6s ease-out 0.2s both;
+        }
+
+        .section-title {
+            font-family: 'Crimson Pro', serif;
+            font-size: 1.5rem;
+            font-weight: 700;
+            margin-bottom: 20px;
+            color: var(--text-primary);
+        }
+
+        .history-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .history-item {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 16px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: all 0.3s ease;
+            animation: slideIn 0.4s ease-out backwards;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateX(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        .history-item:hover {
+            border-color: var(--accent-primary);
+            transform: translateX(4px);
+        }
+
+        .history-date {
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .history-time {
+            font-size: 0.9rem;
+            color: var(--text-muted);
+        }
+
+        .history-period {
+            padding: 6px 12px;
+            background: var(--bg-secondary);
+            border-radius: 8px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: var(--accent-primary);
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 40px 20px;
+            color: var(--text-muted);
+            font-style: italic;
+        }
+
+        .confirmation {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%) translateY(-100px);
+            background: linear-gradient(135deg, var(--accent-success), #22c55e);
+            color: white;
+            padding: 16px 32px;
+            border-radius: 16px;
+            font-weight: 600;
+            box-shadow: 0 10px 40px rgba(74, 222, 128, 0.4);
+            z-index: 1000;
+            opacity: 0;
+            transition: all 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+        }
+
+        .confirmation.show {
+            transform: translateX(-50%) translateY(0);
+            opacity: 1;
+        }
+
+        @media (max-width: 480px) {
+            h1 {
+                font-size: 2rem;
+            }
+            
+            .status-card {
+                padding: 24px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="confirmation" id="confirmation">✓ Injection enregistrée !</div>
+    
+    <div class="container">
+        <header>
+            <h1>🐱 Suivi Insuline</h1>
+            <p class="subtitle">Gardez une trace précise des injections</p>
+        </header>
+
+        <div class="status-card">
+            <div class="status-indicator">
+                <div class="status-dot" id="statusDot"></div>
+                <div class="status-text" id="statusText">Chargement...</div>
+            </div>
+            
+            <div class="last-injection" id="lastInjection">
+                Aucune injection enregistrée aujourd'hui
+            </div>
+
+            <button class="action-button btn-record" onclick="recordInjection()">
+                💉 Enregistrer l'injection
+            </button>
+            
+            <button class="action-button btn-secondary" onclick="showTimePicker()">
+                🕐 Enregistrer avec heure personnalisée
+            </button>
+        </div>
+
+        <div class="history-section">
+            <h2 class="section-title">Historique (7 derniers jours)</h2>
+            <div class="history-list" id="historyList">
+                <div class="empty-state">Aucun historique disponible</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Récupérer l'historique des injections
+        function getInjections() {
+            const stored = localStorage.getItem('catInsulinHistory');
+            return stored ? JSON.parse(stored) : [];
+        }
+
+        // Sauvegarder une injection
+        function saveInjection(timestamp) {
+            const injections = getInjections();
+            injections.push(timestamp);
+            localStorage.setItem('catInsulinHistory', JSON.stringify(injections));
+            updateDisplay();
+            showConfirmation();
+        }
+
+        // Enregistrer une injection maintenant
+        function recordInjection() {
+            saveInjection(Date.now());
+        }
+
+        // Afficher le sélecteur d'heure personnalisé
+        function showTimePicker() {
+            const now = new Date();
+            const hours = String(now.getHours()).padStart(2, '0');
+            const minutes = String(now.getMinutes()).padStart(2, '0');
+            const defaultTime = `${hours}:${minutes}`;
+            
+            const time = prompt('Entrez l\'heure de l\'injection (HH:MM):', defaultTime);
+            
+            if (time) {
+                const [h, m] = time.split(':');
+                const customDate = new Date();
+                customDate.setHours(parseInt(h), parseInt(m), 0, 0);
+                saveInjection(customDate.getTime());
+            }
+        }
+
+        // Afficher la confirmation
+        function showConfirmation() {
+            const conf = document.getElementById('confirmation');
+            conf.classList.add('show');
+            setTimeout(() => {
+                conf.classList.remove('show');
+            }, 3000);
+        }
+
+        // Déterminer la période (matin/soir)
+        function getPeriod(date) {
+            const hours = date.getHours();
+            if (hours >= 5 && hours < 12) return 'Matin';
+            if (hours >= 12 && hours < 18) return 'Après-midi';
+            return 'Soir';
+        }
+
+        // Formater la date
+        function formatDate(timestamp) {
+            const date = new Date(timestamp);
+            const today = new Date();
+            const yesterday = new Date(today);
+            yesterday.setDate(yesterday.getDate() - 1);
+
+            const dateStr = date.toLocaleDateString('fr-FR', { 
+                weekday: 'long', 
+                day: 'numeric', 
+                month: 'long' 
+            });
+
+            if (date.toDateString() === today.toDateString()) {
+                return 'Aujourd\'hui';
+            } else if (date.toDateString() === yesterday.toDateString()) {
+                return 'Hier';
+            }
+            
+            return dateStr.charAt(0).toUpperCase() + dateStr.slice(1);
+        }
+
+        // Formater l'heure
+        function formatTime(timestamp) {
+            return new Date(timestamp).toLocaleTimeString('fr-FR', { 
+                hour: '2-digit', 
+                minute: '2-digit' 
+            });
+        }
+
+        // Vérifier si une injection a été faite aujourd'hui
+        function getLastInjectionToday() {
+            const injections = getInjections();
+            const today = new Date().toDateString();
+            
+            const todayInjections = injections
+                .map(ts => ({ timestamp: ts, date: new Date(ts) }))
+                .filter(inj => inj.date.toDateString() === today)
+                .sort((a, b) => b.timestamp - a.timestamp);
+            
+            return todayInjections[0] || null;
+        }
+
+        // Mettre à jour l'affichage
+        function updateDisplay() {
+            const lastToday = getLastInjectionToday();
+            const statusDot = document.getElementById('statusDot');
+            const statusText = document.getElementById('statusText');
+            const lastInjectionEl = document.getElementById('lastInjection');
+
+            if (lastToday) {
+                statusDot.className = 'status-dot done';
+                statusText.textContent = 'Injection effectuée aujourd\'hui';
+                lastInjectionEl.innerHTML = `
+                    Dernière injection : <strong>${formatTime(lastToday.timestamp)}</strong> 
+                    (${getPeriod(lastToday.date)})
+                `;
+            } else {
+                statusDot.className = 'status-dot pending';
+                statusText.textContent = 'En attente d\'injection';
+                lastInjectionEl.textContent = 'Aucune injection enregistrée aujourd\'hui';
+            }
+
+            updateHistory();
+        }
+
+        // Mettre à jour l'historique
+        function updateHistory() {
+            const injections = getInjections();
+            const historyList = document.getElementById('historyList');
+            
+            // Filtrer les 7 derniers jours
+            const sevenDaysAgo = Date.now() - (7 * 24 * 60 * 60 * 1000);
+            const recentInjections = injections
+                .filter(ts => ts > sevenDaysAgo)
+                .sort((a, b) => b - a);
+
+            if (recentInjections.length === 0) {
+                historyList.innerHTML = '<div class="empty-state">Aucun historique disponible</div>';
+                return;
+            }
+
+            historyList.innerHTML = recentInjections
+                .map((timestamp, index) => {
+                    const date = new Date(timestamp);
+                    return `
+                        <div class="history-item" style="animation-delay: ${index * 0.05}s">
+                            <div>
+                                <div class="history-date">${formatDate(timestamp)}</div>
+                                <div class="history-time">${formatTime(timestamp)}</div>
+                            </div>
+                            <div class="history-period">${getPeriod(date)}</div>
+                        </div>
+                    `;
+                })
+                .join('');
+        }
+
+        // Initialiser au chargement
+        document.addEventListener('DOMContentLoaded', updateDisplay);
+    </script>
+</body>
+</html>

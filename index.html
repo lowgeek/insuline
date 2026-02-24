@@ -482,6 +482,12 @@
             </button>
         </div>
 
+        <div class="status-card" style="margin-bottom: 16px;">
+            <button class="action-button btn-secondary" onclick="resetConfig()">
+                🔄 Reconfigurer l'URL du script
+            </button>
+        </div>
+
         <div class="status-card">
             <div class="status-indicator">
                 <div class="status-dot" id="statusDot"></div>
@@ -535,6 +541,14 @@
             document.getElementById('customTimeBtn').disabled = false;
             
             loadInjections();
+        }
+
+        // Réinitialiser la configuration
+        function resetConfig() {
+            if (confirm('Voulez-vous reconfigurer l\'URL du script Google Apps Script ?')) {
+                localStorage.removeItem(SCRIPT_URL_KEY);
+                location.reload();
+            }
         }
 
         // Vérifier la configuration au chargement

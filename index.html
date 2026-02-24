@@ -342,6 +342,54 @@
             color: var(--accent-primary);
         }
 
+        .history-actions {
+            display: flex;
+            gap: 8px;
+            margin-left: 12px;
+        }
+
+        .history-btn {
+            padding: 8px 12px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            font-weight: 600;
+            transition: all 0.2s ease;
+            font-family: 'DM Sans', sans-serif;
+        }
+
+        .history-btn.edit {
+            background: var(--bg-secondary);
+            color: var(--accent-secondary);
+        }
+
+        .history-btn.edit:hover {
+            background: var(--accent-secondary);
+            color: white;
+        }
+
+        .history-btn.delete {
+            background: var(--bg-secondary);
+            color: var(--accent-primary);
+        }
+
+        .history-btn.delete:hover {
+            background: var(--accent-primary);
+            color: white;
+        }
+
+        .history-item-content {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            width: 100%;
+        }
+
+        .history-item-info {
+            flex: 1;
+        }
+
         .empty-state {
             text-align: center;
             padding: 40px 20px;
@@ -592,12 +640,117 @@
         }
 
         // Afficher la confirmation
-        function showConfirmation() {
+        function showConfirmation(message = '✓ Injection enregistrée !') {
             const conf = document.getElementById('confirmation');
+            conf.textContent = message;
             conf.classList.add('show');
             setTimeout(() => {
                 conf.classList.remove('show');
             }, 3000);
+        }
+
+        // Modifier une injection
+        async function editInjection(oldTimestamp) {
+            const oldDate = new Date(oldTimestamp);
+            const dateStr = oldDate.toLocaleDateString('fr-FR');
+            const timeStr = oldDate.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+            
+            const newDateTime = prompt(
+                `Modifier l'injection du ${dateStr} à ${timeStr}\n\nEntrez la nouvelle date et heure (format: JJ/MM/AAAA HH:MM):`,
+                `${dateStr} ${timeStr}`
+            );
+            
+            if (!newDateTime) return;
+            
+            try {
+                // Parser la nouvelle date/heure
+                const [datePart, timePart] = newDateTime.split(' ');
+                const [day, month, year] = datePart.split('/');
+                const [hours, minutes] = timePart.split(':');
+                
+                const newDate = new Date(year, month - 1, day, hours, minutes, 0, 0);
+                const newTimestamp = newDate.getTime();
+                
+                if (isNaN(newTimestamp)) {
+                    alert('Format invalide. Utilisez: JJ/MM/AAAA HH:MM');
+                    return;
+                }
+                
+                // Supprimer l'ancienne et ajouter la nouvelle
+                if (!SCRIPT_URL || isSyncing) return;
+
+                updateSyncStatus('Modification...', 'syncing');
+                isSyncing = true;
+
+                try {
+                    const response = await fetch(SCRIPT_URL, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/x-www-form-urlencoded',
+                        },
+                        body: `action=edit&oldTimestamp=${oldTimestamp}&newTimestamp=${newTimestamp}`
+                    });
+
+                    const data = await response.json();
+                    
+                    if (data.success) {
+                        showConfirmation('✓ Injection modifiée !');
+                        await loadInjections();
+                    } else {
+                        throw new Error(data.error || 'Erreur de modification');
+                    }
+                } catch (error) {
+                    console.error('Erreur de modification:', error);
+                    alert('Erreur lors de la modification. Veuillez réessayer.');
+                    updateSyncStatus('Erreur de sync', 'error');
+                } finally {
+                    isSyncing = false;
+                }
+                
+            } catch (error) {
+                alert('Format invalide. Utilisez: JJ/MM/AAAA HH:MM');
+            }
+        }
+
+        // Supprimer une injection
+        async function deleteInjection(timestamp) {
+            const date = new Date(timestamp);
+            const dateStr = date.toLocaleDateString('fr-FR');
+            const timeStr = date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+            
+            if (!confirm(`Voulez-vous vraiment supprimer l'injection du ${dateStr} à ${timeStr} ?`)) {
+                return;
+            }
+            
+            if (!SCRIPT_URL || isSyncing) return;
+
+            updateSyncStatus('Suppression...', 'syncing');
+            isSyncing = true;
+
+            try {
+                const response = await fetch(SCRIPT_URL, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    body: `action=delete&timestamp=${timestamp}`
+                });
+
+                const data = await response.json();
+                
+                if (data.success) {
+                    showConfirmation('✓ Injection supprimée !');
+                    await loadInjections();
+                } else {
+                    throw new Error(data.error || 'Erreur de suppression');
+                }
+            } catch (error) {
+                console.error('Erreur de suppression:', error);
+                alert('Erreur lors de la suppression. Veuillez réessayer.');
+                updateSyncStatus('Erreur de sync', 'error');
+            } finally {
+                isSyncing = false;
+            }
         }
 
         // Déterminer la période (matin/soir)
@@ -693,11 +846,17 @@
                     const date = new Date(timestamp);
                     return `
                         <div class="history-item" style="animation-delay: ${index * 0.05}s">
-                            <div>
-                                <div class="history-date">${formatDate(timestamp)}</div>
-                                <div class="history-time">${formatTime(timestamp)}</div>
+                            <div class="history-item-content">
+                                <div class="history-item-info">
+                                    <div class="history-date">${formatDate(timestamp)}</div>
+                                    <div class="history-time">${formatTime(timestamp)}</div>
+                                </div>
+                                <div class="history-period">${getPeriod(date)}</div>
+                                <div class="history-actions">
+                                    <button class="history-btn edit" onclick="editInjection(${timestamp})" title="Modifier">✏️</button>
+                                    <button class="history-btn delete" onclick="deleteInjection(${timestamp})" title="Supprimer">🗑️</button>
+                                </div>
                             </div>
-                            <div class="history-period">${getPeriod(date)}</div>
                         </div>
                     `;
                 })

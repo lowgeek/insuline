@@ -803,24 +803,89 @@
             return todayInjections[0] || null;
         }
 
+        // Obtenir les injections du matin et du soir d'aujourd'hui
+        function getTodayInjections(injections) {
+            const today = new Date().toDateString();
+            
+            const todayInjections = injections
+                .map(ts => ({ timestamp: ts, date: new Date(ts) }))
+                .filter(inj => inj.date.toDateString() === today);
+            
+            // Séparer matin (avant 14h) et soir (14h et après)
+            const morning = todayInjections.filter(inj => inj.date.getHours() < 14).sort((a, b) => b.timestamp - a.timestamp)[0] || null;
+            const evening = todayInjections.filter(inj => inj.date.getHours() >= 14).sort((a, b) => b.timestamp - a.timestamp)[0] || null;
+            
+            return { morning, evening, all: todayInjections };
+        }
+
         // Mettre à jour l'affichage
         function updateDisplay(injections) {
-            const lastToday = getLastInjectionToday(injections);
+            const todayInj = getTodayInjections(injections);
             const statusDot = document.getElementById('statusDot');
             const statusText = document.getElementById('statusText');
             const lastInjectionEl = document.getElementById('lastInjection');
-
-            if (lastToday) {
-                statusDot.className = 'status-dot done';
-                statusText.textContent = 'Injection effectuée aujourd\'hui';
-                lastInjectionEl.innerHTML = `
-                    Dernière injection : <strong>${formatTime(lastToday.timestamp)}</strong> 
-                    (${getPeriod(lastToday.date)})
-                `;
-            } else {
+            
+            const now = new Date();
+            const currentHour = now.getHours();
+            const currentMinutes = now.getMinutes();
+            const currentTimeInMinutes = currentHour * 60 + currentMinutes;
+            
+            // Définir les plages horaires
+            const morningStartTime = 6 * 60 + 30; // 6h30
+            const eveningStartTime = 18 * 60 + 30; // 18h30
+            
+            let needsMorning = false;
+            let needsEvening = false;
+            
+            // Déterminer quelle injection est attendue selon l'heure
+            if (currentTimeInMinutes >= morningStartTime && currentTimeInMinutes < eveningStartTime) {
+                // Entre 6h30 et 18h30 : on attend l'injection du matin
+                needsMorning = true;
+            } else if (currentTimeInMinutes >= eveningStartTime) {
+                // Après 18h30 : on attend l'injection du soir (et le matin doit être fait aussi)
+                needsEvening = true;
+            }
+            // Avant 6h30 : rien n'est attendu encore
+            
+            // Vérifier le statut
+            if (needsMorning && !todayInj.morning) {
+                // Il est entre 6h30 et 18h30 et l'injection du matin n'est pas faite
                 statusDot.className = 'status-dot pending';
                 statusText.textContent = 'En attente d\'injection';
-                lastInjectionEl.textContent = 'Aucune injection enregistrée aujourd\'hui';
+                lastInjectionEl.textContent = 'Injection du matin en attente';
+            } else if (needsMorning && todayInj.morning && !needsEvening) {
+                // Injection du matin faite, et il n'est pas encore 18h30
+                statusDot.className = 'status-dot done';
+                statusText.textContent = 'Injection effectuée aujourd\'hui';
+                lastInjectionEl.innerHTML = `Injection du matin effectuée à <strong>${formatTime(todayInj.morning.timestamp)}</strong>`;
+            } else if (needsEvening && !todayInj.evening) {
+                // Il est après 18h30 et l'injection du soir n'est pas faite
+                statusDot.className = 'status-dot pending';
+                statusText.textContent = 'En attente d\'injection';
+                if (todayInj.morning) {
+                    lastInjectionEl.innerHTML = `Matin effectuée à <strong>${formatTime(todayInj.morning.timestamp)}</strong><br>Injection du soir en attente`;
+                } else {
+                    lastInjectionEl.innerHTML = '⚠️ Aucune injection effectuée aujourd\'hui';
+                }
+            } else if (needsEvening && todayInj.evening) {
+                // Il est après 18h30 et l'injection du soir est faite
+                statusDot.className = 'status-dot done';
+                statusText.textContent = 'Injection effectuée aujourd\'hui';
+                if (todayInj.morning && todayInj.evening) {
+                    lastInjectionEl.innerHTML = `Les deux injections sont effectuées :<br>Matin : <strong>${formatTime(todayInj.morning.timestamp)}</strong> | Soir : <strong>${formatTime(todayInj.evening.timestamp)}</strong>`;
+                } else {
+                    lastInjectionEl.innerHTML = `Injection du soir effectuée à <strong>${formatTime(todayInj.evening.timestamp)}</strong>`;
+                }
+            } else {
+                // Avant 6h30 du matin
+                statusDot.className = 'status-dot pending';
+                statusText.textContent = 'Aucune injection attendue pour le moment';
+                if (todayInj.all.length > 0) {
+                    const lastInj = todayInj.all.sort((a, b) => b.timestamp - a.timestamp)[0];
+                    lastInjectionEl.innerHTML = `Dernière injection : <strong>${formatTime(lastInj.timestamp)}</strong>`;
+                } else {
+                    lastInjectionEl.textContent = 'Première injection du jour à partir de 6h30';
+                }
             }
 
             updateHistory(injections);

@@ -586,13 +586,7 @@
                 }
             } catch (error) {
                 console.error('Erreur de chargement:', error);
-                console.error('URL utilisée:', SCRIPT_URL);
-                updateSyncStatus('Erreur: ' + error.message, 'error');
-                
-                // Afficher une alerte plus détaillée sur mobile
-                if (confirm('Erreur de synchronisation. Voulez-vous voir les détails ?')) {
-                    alert('Erreur: ' + error.message + '\n\nURL: ' + SCRIPT_URL + '\n\nVérifiez que le script est déployé pour "Tout le monde"');
-                }
+                updateSyncStatus('Erreur de sync', 'error');
             } finally {
                 isSyncing = false;
             }
@@ -634,8 +628,8 @@
                 }
             } catch (error) {
                 console.error('Erreur d\'enregistrement:', error);
-                alert('Erreur lors de l\'enregistrement: ' + error.message + '\n\nVérifiez votre connexion Internet et que le script est bien déployé.');
-                updateSyncStatus('Erreur: ' + error.message, 'error');
+                alert('Erreur lors de l\'enregistrement. Veuillez réessayer.');
+                updateSyncStatus('Erreur de sync', 'error');
             } finally {
                 isSyncing = false;
             }

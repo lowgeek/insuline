@@ -99,6 +99,32 @@
             font-weight: 400;
         }
 
+        .sync-status {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            margin-top: 8px;
+        }
+
+        .sync-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--accent-success);
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        .sync-dot.syncing {
+            background: var(--accent-secondary);
+        }
+
+        .sync-dot.error {
+            background: var(--accent-primary);
+            animation: none;
+        }
+
         .status-card {
             background: var(--bg-card);
             border: 1px solid var(--border);
@@ -219,6 +245,11 @@
             height: 400px;
         }
 
+        .action-button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
         .btn-record {
             background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
             color: white;
@@ -226,12 +257,12 @@
             margin-bottom: 16px;
         }
 
-        .btn-record:hover {
+        .btn-record:hover:not(:disabled) {
             transform: translateY(-2px);
             box-shadow: 0 15px 40px rgba(255, 107, 157, 0.5);
         }
 
-        .btn-record:active {
+        .btn-record:active:not(:disabled) {
             transform: translateY(0);
         }
 
@@ -241,7 +272,7 @@
             border: 1px solid var(--border);
         }
 
-        .btn-secondary:hover {
+        .btn-secondary:hover:not(:disabled) {
             background: var(--bg-card);
             border-color: var(--accent-primary);
         }
@@ -339,6 +370,38 @@
             opacity: 1;
         }
 
+        .config-section {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 24px;
+            padding: 24px;
+            margin-bottom: 24px;
+            animation: fadeInUp 0.6s ease-out 0.15s both;
+        }
+
+        .config-section input {
+            width: 100%;
+            padding: 12px;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            color: var(--text-primary);
+            font-family: 'DM Sans', sans-serif;
+            font-size: 0.9rem;
+            margin-top: 8px;
+        }
+
+        .config-section input:focus {
+            outline: none;
+            border-color: var(--accent-primary);
+        }
+
+        .config-section label {
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: var(--text-secondary);
+        }
+
         @media (max-width: 480px) {
             h1 {
                 font-size: 2rem;
@@ -357,7 +420,19 @@
         <header>
             <h1>🐱 Suivi Insuline</h1>
             <p class="subtitle">Gardez une trace précise des injections</p>
+            <div class="sync-status">
+                <div class="sync-dot" id="syncDot"></div>
+                <span id="syncStatus">Synchronisation...</span>
+            </div>
         </header>
+
+        <div class="config-section" id="configSection">
+            <label for="scriptUrl">URL du script Google Apps Script :</label>
+            <input type="text" id="scriptUrl" placeholder="https://script.google.com/macros/s/...../exec">
+            <button class="action-button btn-record" style="margin-top: 16px;" onclick="saveConfig()">
+                💾 Sauvegarder la configuration
+            </button>
+        </div>
 
         <div class="status-card">
             <div class="status-indicator">
@@ -369,11 +444,11 @@
                 Aucune injection enregistrée aujourd'hui
             </div>
 
-            <button class="action-button btn-record" onclick="recordInjection()">
+            <button class="action-button btn-record" id="recordBtn" onclick="recordInjection()" disabled>
                 💉 Enregistrer l'injection
             </button>
             
-            <button class="action-button btn-secondary" onclick="showTimePicker()">
+            <button class="action-button btn-secondary" id="customTimeBtn" onclick="showTimePicker()" disabled>
                 🕐 Enregistrer avec heure personnalisée
             </button>
         </div>
@@ -387,24 +462,116 @@
     </div>
 
     <script>
-        // Récupérer l'historique des injections
-        function getInjections() {
-            const stored = localStorage.getItem('catInsulinHistory');
-            return stored ? JSON.parse(stored) : [];
+        // Configuration
+        const SCRIPT_URL_KEY = 'catInsulin_scriptUrl';
+        let SCRIPT_URL = localStorage.getItem(SCRIPT_URL_KEY) || '';
+
+        // État de synchronisation
+        let isSyncing = false;
+
+        // Sauvegarder la configuration
+        function saveConfig() {
+            const input = document.getElementById('scriptUrl');
+            const url = input.value.trim();
+            
+            if (!url) {
+                alert('Veuillez entrer une URL valide');
+                return;
+            }
+
+            localStorage.setItem(SCRIPT_URL_KEY, url);
+            SCRIPT_URL = url;
+            
+            document.getElementById('configSection').style.display = 'none';
+            document.getElementById('recordBtn').disabled = false;
+            document.getElementById('customTimeBtn').disabled = false;
+            
+            loadInjections();
+        }
+
+        // Vérifier la configuration au chargement
+        function checkConfig() {
+            if (SCRIPT_URL) {
+                document.getElementById('configSection').style.display = 'none';
+                document.getElementById('scriptUrl').value = SCRIPT_URL;
+                document.getElementById('recordBtn').disabled = false;
+                document.getElementById('customTimeBtn').disabled = false;
+                loadInjections();
+            } else {
+                updateSyncStatus('Configuration requise', 'error');
+            }
+        }
+
+        // Mettre à jour le statut de synchronisation
+        function updateSyncStatus(message, status = 'success') {
+            const syncDot = document.getElementById('syncDot');
+            const syncStatus = document.getElementById('syncStatus');
+            
+            syncDot.className = 'sync-dot ' + status;
+            syncStatus.textContent = message;
+        }
+
+        // Charger les injections depuis Google Sheets
+        async function loadInjections() {
+            if (!SCRIPT_URL) return;
+
+            updateSyncStatus('Synchronisation...', 'syncing');
+            isSyncing = true;
+
+            try {
+                const response = await fetch(SCRIPT_URL + '?action=get');
+                const data = await response.json();
+                
+                if (data.success) {
+                    updateDisplay(data.injections || []);
+                    updateSyncStatus('Synchronisé', 'success');
+                } else {
+                    throw new Error(data.error || 'Erreur de chargement');
+                }
+            } catch (error) {
+                console.error('Erreur de chargement:', error);
+                updateSyncStatus('Erreur de sync', 'error');
+            } finally {
+                isSyncing = false;
+            }
+        }
+
+        // Enregistrer une injection
+        async function recordInjection() {
+            await saveInjection(Date.now());
         }
 
         // Sauvegarder une injection
-        function saveInjection(timestamp) {
-            const injections = getInjections();
-            injections.push(timestamp);
-            localStorage.setItem('catInsulinHistory', JSON.stringify(injections));
-            updateDisplay();
-            showConfirmation();
-        }
+        async function saveInjection(timestamp) {
+            if (!SCRIPT_URL || isSyncing) return;
 
-        // Enregistrer une injection maintenant
-        function recordInjection() {
-            saveInjection(Date.now());
+            updateSyncStatus('Enregistrement...', 'syncing');
+            isSyncing = true;
+
+            try {
+                const response = await fetch(SCRIPT_URL, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    body: `action=add&timestamp=${timestamp}`
+                });
+
+                const data = await response.json();
+                
+                if (data.success) {
+                    showConfirmation();
+                    await loadInjections();
+                } else {
+                    throw new Error(data.error || 'Erreur d\'enregistrement');
+                }
+            } catch (error) {
+                console.error('Erreur d\'enregistrement:', error);
+                alert('Erreur lors de l\'enregistrement. Veuillez réessayer.');
+                updateSyncStatus('Erreur de sync', 'error');
+            } finally {
+                isSyncing = false;
+            }
         }
 
         // Afficher le sélecteur d'heure personnalisé
@@ -472,8 +639,7 @@
         }
 
         // Vérifier si une injection a été faite aujourd'hui
-        function getLastInjectionToday() {
-            const injections = getInjections();
+        function getLastInjectionToday(injections) {
             const today = new Date().toDateString();
             
             const todayInjections = injections
@@ -485,8 +651,8 @@
         }
 
         // Mettre à jour l'affichage
-        function updateDisplay() {
-            const lastToday = getLastInjectionToday();
+        function updateDisplay(injections) {
+            const lastToday = getLastInjectionToday(injections);
             const statusDot = document.getElementById('statusDot');
             const statusText = document.getElementById('statusText');
             const lastInjectionEl = document.getElementById('lastInjection');
@@ -504,12 +670,11 @@
                 lastInjectionEl.textContent = 'Aucune injection enregistrée aujourd\'hui';
             }
 
-            updateHistory();
+            updateHistory(injections);
         }
 
         // Mettre à jour l'historique
-        function updateHistory() {
-            const injections = getInjections();
+        function updateHistory(injections) {
             const historyList = document.getElementById('historyList');
             
             // Filtrer les 7 derniers jours
@@ -539,8 +704,15 @@
                 .join('');
         }
 
+        // Auto-refresh toutes les 30 secondes
+        setInterval(() => {
+            if (SCRIPT_URL && !isSyncing) {
+                loadInjections();
+            }
+        }, 30000);
+
         // Initialiser au chargement
-        document.addEventListener('DOMContentLoaded', updateDisplay);
+        document.addEventListener('DOMContentLoaded', checkConfig);
     </script>
 </body>
 </html>
